@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wave Noise</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background-color: #050505;
+        position: relative;
+        overflow: hidden;
+    }
+    canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        opacity: 0.15;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        document.body.appendChild(canvas);
+        
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        let time = 0;
+        
+        function animate() {
+            ctx.fillStyle = 'rgba(5,5,5,0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const i = (y * canvas.width + x) * 4;
+                    
+                    const wave = Math.sin(x * 0.02 + time) * 20 + 
+                               Math.sin(y * 0.01 + time * 0.7) * 15;
+                    
+                    if (Math.random() < 0.1) {
+                        const intensity = Math.abs(wave) * 2;
+                        data[i] = intensity * 0.8;     // R
+                        data[i + 1] = intensity * 0.9; // G
+                        data[i + 2] = intensity;       // B
+                        data[i + 3] = 255;
+                    }
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            time += 0.01;
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
+    });
+</script>
+</head>
+<body>
+</body>
+</html>

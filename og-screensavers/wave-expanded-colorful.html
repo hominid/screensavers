@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Colorful Waves</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #080808;
+        overflow: hidden;
+    }
+    canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0.25;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        document.body.appendChild(canvas);
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        resize();
+        window.addEventListener('resize', resize);
+
+        let time = 0;
+        
+        const waves = [
+            { pos: 0.35, freq: 0.01, amp: 0.2, color: '#3B4CCA', phase: 0 },
+            { pos: 0.5, freq: 0.015, amp: 0.15, color: '#4F1B6F', phase: 0.5 },
+            { pos: 0.65, freq: 0.02, amp: 0.1, color: '#2E5090', phase: 1 }
+        ];
+        
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            waves.forEach(wave => {
+                ctx.beginPath();
+                ctx.strokeStyle = wave.color;
+                ctx.lineWidth = 2;
+                
+                for (let x = 0; x < canvas.width; x++) {
+                    const heightFactor = canvas.height * wave.amp;
+                    const y = canvas.height * wave.pos + 
+                        Math.sin(x * wave.freq + time + wave.phase) * heightFactor + 
+                        Math.sin(x * wave.freq * 2 + time * 1.1 + wave.phase) * (heightFactor * 0.3);
+                    
+                    if (x === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                
+                ctx.stroke();
+            });
+            
+            time += 0.003;
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
+    });
+</script>
+</head>
+<body>
+</body>
+</html>

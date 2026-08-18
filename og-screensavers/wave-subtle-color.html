@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subtle Colored Wave</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #050505;
+        overflow: hidden;
+    }
+    canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0.12;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        document.body.appendChild(canvas);
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        resize();
+        window.addEventListener('resize', resize);
+
+        let time = 0;
+        const colors = [
+            '#2a1f1f',
+            '#1f2a1f',
+            '#1f1f2a',
+            '#2a2a1f'
+        ];
+        
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            
+            const colorIndex = Math.floor(time * 0.1) % colors.length;
+            const nextColorIndex = (colorIndex + 1) % colors.length;
+            const progress = (time * 0.1) % 1;
+            
+            const currentColor = colors[colorIndex];
+            const nextColor = colors[nextColorIndex];
+            
+            ctx.strokeStyle = currentColor;
+            
+            for (let x = 0; x < canvas.width; x++) {
+                const y = canvas.height/2 + 
+                    Math.sin(x * 0.01 + time) * 30 + 
+                    Math.sin(x * 0.02 + time * 1.1) * 15;
+                
+                if (x === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            
+            ctx.stroke();
+            time += 0.005;
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
+    });
+</script>
+</head>
+<body>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dandelion Seeds</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #030303;
+        overflow: hidden;
+    }
+    .particle {
+        position: fixed;
+        background: rgba(255, 252, 240, 0.15);
+        border-radius: 50%;
+        pointer-events: none;
+        box-shadow: 0 0 2px rgba(255, 252, 240, 0.1);
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        for (let i = 0; i < 40; i++) {
+            createParticle();
+        }
+    });
+
+    function createParticle() {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        const size = Math.random() * 4 + 2;
+        particle.style.width = size + 'px';
+        particle.style.height = size + 'px';
+        
+        const startX = Math.random() * window.innerWidth;
+        const startY = Math.random() * window.innerHeight;
+        
+        const keyframes = [];
+        const steps = 5;
+        const targetX = Math.random() * window.innerWidth;
+        const targetY = Math.random() * window.innerHeight;
+        
+        particle.style.left = startX + 'px';
+        particle.style.top = startY + 'px';
+        
+        document.body.appendChild(particle);
+        
+        const duration = Math.random() * 60000 + 40000;
+        
+        for (let i = 0; i <= steps; i++) {
+            const progress = i / steps;
+            const x = startX + (targetX - startX) * progress;
+            const y = startY + (targetY - startY) * progress;
+            const offset = Math.sin(progress * Math.PI * 2) * 50;
+            keyframes.push({
+                transform: `translate(${offset}px, ${y - startY}px)`,
+                opacity: Math.random() * 0.3 + 0.4
+            });
+        }
+        
+        particle.animate(keyframes, {
+            duration: duration,
+            easing: 'ease-in-out'
+        }).onfinish = () => {
+            particle.remove();
+            createParticle();
+        };
+    }
+</script>
+</head>
+<body>
+</body>
+</html>

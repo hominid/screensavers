@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enhanced Diffuse Clusters</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #001524;
+        overflow: hidden;
+    }
+    .particle {
+        position: fixed;
+        background: rgba(180, 200, 255, 0.4);
+        border-radius: 50%;
+        pointer-events: none;
+        box-shadow: 0 0 3px rgba(180, 200, 255, 0.25);
+    }
+    .particle.background {
+        background: rgba(180, 200, 255, 0.3);
+        box-shadow: 0 0 2px rgba(180, 200, 255, 0.2);
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        function createCluster(centerX, centerY, numParticles, radius) {
+            for (let i = 0; i < numParticles; i++) {
+                const r = Math.pow(Math.random(), 0.7) * radius; // More even distribution with soft edges
+                const angle = Math.random() * Math.PI * 2;
+                const x = centerX + Math.cos(angle) * r;
+                const y = centerY + Math.sin(angle) * r;
+                createParticle(x, y, false, radius);
+            }
+        }
+
+        function createBackgroundParticles(num) {
+            for (let i = 0; i < num; i++) {
+                const x = Math.random() * window.innerWidth;
+                const y = Math.random() * window.innerHeight;
+                createParticle(x, y, true);
+            }
+        }
+
+        function initClusters() {
+            // Create dense background
+            createBackgroundParticles(200);
+            
+            // Create varied clusters
+            const clusters = [
+                { particles: 40, radius: 200 },
+                { particles: 30, radius: 150 },
+                { particles: 50, radius: 250 },
+                { particles: 35, radius: 180 },
+                { particles: 45, radius: 220 }
+            ];
+            
+            clusters.forEach(cluster => {
+                const x = Math.random() * window.innerWidth;
+                const y = Math.random() * window.innerHeight;
+                createCluster(x, y, cluster.particles, cluster.radius);
+            });
+        }
+
+        function createParticle(x, y, isBackground = false, clusterRadius = 100) {
+            const particle = document.createElement('div');
+            particle.className = isBackground ? 'particle background' : 'particle';
+            
+            // Varied sizes based on type and position
+            const baseSize = isBackground ? 2 : 3;
+            const sizeVariation = isBackground ? 1 : 2;
+            const size = Math.random() * sizeVariation + baseSize;
+            
+            particle.style.width = size + 'px';
+            particle.style.height = size + 'px';
+            
+            // Brighter particles near cluster centers
+            if (!isBackground) {
+                const brightness = Math.random() * 0.3 + 0.4;
+                particle.style.opacity = brightness.toString();
+            }
+            
+            particle.style.left = x + 'px';
+            particle.style.top = y + 'px';
+            
+            document.body.appendChild(particle);
+            
+            // Animation parameters
+            const duration = Math.random() * 40000 + 30000;
+            const range = isBackground ? 150 : clusterRadius * 0.8;
+            const targetX = x + (Math.random() - 0.5) * range;
+            const targetY = y + (Math.random() - 0.5) * range;
+            
+            const keyframes = [];
+            const steps = 10;
+            
+            for (let i = 0; i <= steps; i++) {
+                const progress = i / steps;
+                const currentX = x + (targetX - x) * progress;
+                const currentY = y + (targetY - y) * progress;
+                const offset = Math.sin(progress * Math.PI * 2) * (isBackground ? 20 : 40);
+                
+                keyframes.push({
+                    transform: `translate(${offset}px, ${currentY - y}px)`,
+                    opacity: isBackground ? 0.3 : (Math.random() * 0.3 + 0.4)
+                });
+            }
+            
+            particle.animate(keyframes, {
+                duration: duration,
+                easing: 'ease-in-out'
+            }).onfinish = () => {
+                particle.remove();
+                createParticle(targetX, targetY, isBackground, clusterRadius);
+            };
+        }
+
+        initClusters();
+    });
+</script>
+</head>
+<body>
+</body>
+</html>

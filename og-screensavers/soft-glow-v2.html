@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enhanced Soft Glow</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #080808;
+        overflow: hidden;
+    }
+    .glow {
+        position: fixed;
+        width: 100vmax;
+        height: 100vmax;
+        pointer-events: none;
+        animation: moveGlow 30s ease-in-out infinite;
+    }
+    @keyframes moveGlow {
+        0% { 
+            transform: translate(-50%, -50%) scale(1);
+            background: radial-gradient(circle, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 70%);
+        }
+        25% { 
+            transform: translate(-30%, -30%) scale(1.1);
+            background: radial-gradient(circle, rgba(255,252,245,0.025) 0%, rgba(255,255,255,

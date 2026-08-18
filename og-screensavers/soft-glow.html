@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soft Glow</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #1a1a1a;
+        overflow: hidden;
+    }
+    .glow {
+        position: fixed;
+        width: 100vmax;
+        height: 100vmax;
+        background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 70%);
+        pointer-events: none;
+        animation: moveGlow 20s ease-in-out infinite;
+    }
+    @keyframes moveGlow {
+        0% { transform: translate(-50%, -50%) scale(1); }
+        25% { transform: translate(-30%, -30%) scale(1.1); }
+        50% { transform: translate(-50%, -70%) scale(0.9); }
+        75% { transform: translate(-70%, -50%) scale(1.1); }
+        100% { transform: translate(-50%, -50%) scale(1); }
+    }
+</style>
+</head>
+<body>
+    <div class="glow"></div>
+</body>
+</html>

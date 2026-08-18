@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connected Particles</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #001524;
+        overflow: hidden;
+    }
+    canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        document.body.appendChild(canvas);
+
+        let particles = [];
+        let clusters = [];
+        
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        resize();
+        window.addEventListener('resize', resize);
+
+        class Particle {
+            constructor(x, y, clusterId) {
+                this.x = x;
+                this.y = y;
+                this.targetX = x;
+                this.targetY = y;
+                this.progress = 0;
+                this.speed = 0.0001 + Math.random() * 0.0001;
+                this.offset = Math.random() * Math.PI * 2;
+                this.clusterId = clusterId;
+                this.size = Math.random() * 2 + 1;
+                this.setNewTarget();
+            }
+
+            setNewTarget() {
+                const cluster = clusters[this.clusterId];
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * cluster.radius;
+                this.startX = this.x;
+                this.startY = this.y;
+                this.targetX = cluster.x + Math.cos(angle) * distance;
+                this.targetY = cluster.y + Math.sin(angle) * distance;
+                this.progress = 0;
+            }
+
+            update() {
+                this.progress += this.speed;
+                if (this.progress >= 1) {
+                    this.setNewTarget();
+                }
+                
+                const t = Math.sin(this.progress * Math.PI);
+                this.x = this.startX + (this.targetX - this.startX) * t;
+                this.y = this.startY + (this.targetY - this.startY) * t;
+            }
+        }
+
+        function createCluster(x, y, numParticles, radius) {
+            const clusterId = clusters.length;
+            clusters.push({ x, y, radius });
+            
+            for (let i = 0; i < numParticles; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * radius;
+                const particleX = x + Math.cos(angle) * distance;
+                const particleY = y + Math.sin(angle) * distance;
+                particles.push(new Particle(particleX, particleY, clusterId));
+            }
+        }
+
+        function distributeCluster(minDistance) {
+            let x, y, attempts = 0;
+            const maxAttempts = 50;
+            
+            do {
+                x = Math.random() * canvas.width;
+                y = Math.random() * canvas.height;
+                attempts++;
+                
+                let valid = true;
+                for (let cluster of clusters) {
+                    const dx = x - cluster.x;
+                    const dy = y - cluster.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < minDistance) {
+                        valid = false;
+                        break;
+                    }
+                }
+                
+                if (valid || attempts >= maxAttempts) return { x, y };
+            } while (true);
+        }
+
+        function init() {
+            particles = [];
+            clusters = [];
+            
+            // Main clusters (8-12)
+            const mainClusters = [
+                { particles: 50, radius: 300 },
+                { particles: 30, radius: 200 },
+                { particles: 40, radius: 250 },
+                { particles: 35, radius: 180 },
+                { particles: 45, radius: 270 },
+                { particles: 25, radius: 150 },
+                { particles: 55, radius: 320 },
+                { particles: 35, radius: 220 },
+                { particles: 40, radius: 280 },
+                { particles: 30, radius: 190 },
+                { particles: 45, radius: 260 },
+                { particles: 35, radius: 230 }
+            ];
+            
+            // Small clusters (4-7)
+            const smallClusters = [
+                { particles: 15, radius: 100 },
+                { particles: 12, radius: 80 },
+                { particles: 18, radius: 120 },
+                { particles: 10, radius: 90 },
+                { particles: 20, radius: 110 },
+                { particles: 13, radius: 85 },
+                { particles: 16, radius: 95 }
+            ];
+            
+            const numMainClusters = Math.floor(Math.random() * 5) + 8;  // 8-12
+            const numSmallClusters = Math.floor(Math.random() * 4) + 4; // 4-7
+            
+            // Place main clusters
+            for (let i = 0; i < numMainClusters; i++) {
+                const config = mainClusters[i];
+                const pos = distributeCluster(config.radius * 0.8);
+                createCluster(pos.x, pos.y, config.particles, config.radius);
+            }
+            
+            // Place small clusters
+            for (let i = 0; i < numSmallClusters; i++) {
+                const config = smallClusters[i];
+                const pos = distributeCluster(config.radius * 0.8);
+                createCluster(pos.x, pos.y, config.particles, config.radius);
+            }
+        }
+
+        function drawConnections() {
+            clusters.forEach((cluster, clusterId) => {
+                const clusterParticles = particles.filter(p => p.clusterId === clusterId);
+                
+                clusterParticles.forEach((p1, i) => {
+                    clusterParticles.forEach((p2, j) => {
+                        if (i < j) {
+                            const dx = p1.x - p2.x;
+                            const dy = p1.y - p2.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance < 120) {
+                                const alpha = (1 - distance / 120) * 0.2;
+                                ctx.strokeStyle = `rgba(180, 200, 255, ${alpha})`;
+                                ctx.beginPath();
+                                ctx.moveTo(p1.x, p1.y);
+                                ctx.lineTo(p2.x, p2.y);
+                                ctx.stroke();
+                            }
+                        }
+                    });
+                });
+            });
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawConnections();
+            
+            particles.forEach(particle => {
+                particle.update();
+                
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(180, 200, 255, 0.4)';
+                ctx.fill();
+            });
+            
+            requestAnimationFrame(animate);
+        }
+
+        init();
+        animate();
+    });
+</script>
+</head>
+<body>
+</body>
+</html>

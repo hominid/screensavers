@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stars</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #050505;
+        overflow: hidden;
+    }
+    .particle {
+        position: fixed;
+        background: rgba(255, 253, 230, 0.4);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        for (let i = 0; i < 75; i++) {
+            createParticle();
+        }
+    });
+
+    function createParticle() {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        const size = Math.random() * 2.5 + 0.5;
+        particle.style.width = size + 'px';
+        particle.style.height = size + 'px';
+        
+        const startX = Math.random() * window.innerWidth;
+        const startY = Math.random() * window.innerHeight;
+        particle.style.left = startX + 'px';
+        particle.style.top = startY + 'px';
+        
+        document.body.appendChild(particle);
+        
+        animateParticle(particle);
+    }
+
+    function animateParticle(particle) {
+        const duration = Math.random() * 40000 + 30000;
+        const targetX = Math.random() * window.innerWidth;
+        const targetY = Math.random() * window.innerHeight;
+        
+        particle.animate([
+            { transform: 'translate(0, 0)', opacity: Math.random() * 0.3 + 0.7 },
+            { transform: `translate(${targetX - parseFloat(particle.style.left)}px, ${targetY - parseFloat(particle.style.top)}px)`, opacity: Math.random() * 0.3 + 0.7 }
+        ], {
+            duration: duration,
+            easing: 'linear'
+        }).onfinish = () => {
+            particle.remove();
+            createParticle();
+        };
+    }
+</script>
+</head>
+<body>
+</body>
+</html>

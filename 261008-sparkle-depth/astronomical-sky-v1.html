@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Astronomical Sky</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #020a14;
+        overflow: hidden;
+    }
+    canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const SKY_ROTATION = true;
+        const MILKY_WAY = true;
+        const NEBULAE = true;
+        const GLOW = true;
+        const CONSTELLATION_LINES = true;
+        const DIFFRACTION_SPIKES = true;
+
+        const TARGET_FPS = 30;
+        const FRAME_MS = 1000 / TARGET_FPS;
+        const ROTATION_RATE = -(2 * Math.PI) / 86164;
+        const ORBIT_SPEED = 1;
+        const POLE_X = 0.3;
+        const POLE_Y = -0.35;
+        const CLUSTER_DENSITY = 12 / (1920 * 1080);
+        const FIELD_DENSITY = 1 / 2600;
+        const LINK_DIST = 120;
+        const LINK_DIST_SQ = LINK_DIST * LINK_DIST;
+        const LINE_RGB = '170, 185, 215';
+        const LINE_ALPHA = 0.18;
+        const STAR_ALPHA = 0.85;
+        const GLOW_SCALE = 0.25;
+        const GLOW_RADIUS = 110;
+        const GLOW_BLOB_ALPHA = 0.07;
+        const GLOW_STRENGTH = 0.24;
+        const NEBULA_ALPHA = 0.5;
+        const MW_SCALE = 0.25;
+        const MW_WIDTH = 760;
+        const MW_STRENGTH = 0.16;
+        const BG_REDRAW_MS = 1000;
+
+        const STAR_TYPES = [
+            { rgb: [155, 176, 255], young: 0.14, old: 0.00, field: 0.05, brightness: 1.2 },
+            { rgb: [170, 191, 255], young: 0.20, old: 0.03, field: 0.10, brightness: 1.1 },
+            { rgb: [202, 215, 255], young: 0.22, old: 0.10, field: 0.20, brightness: 1.05 },
+            { rgb: [248, 247, 255], young: 0.18, old: 0.20, field: 0.22, brightness: 1 },
+            { rgb: [255, 244, 234], young: 0.12, old: 0.25, field: 0.18, brightness: 0.95 },
+            { rgb: [255, 210, 161], young: 0.10, old: 0.30, field: 0.17, brightness: 0.9 },
+            { rgb: [255, 204, 111], young: 0.04, old: 0.12, field: 0.08, brightness: 0.85 }
+        ];
+
+        const bgCanvas = document.createElement('canvas');
+        const bctx = bgCanvas.getContext('2d');
+        document.body.appendChild(bgCanvas);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        document.body.appendChild(canvas);
+        const glowCanvas = document.createElement('canvas');
+        const gctx = glowCanvas.getContext('2d');
+
+        let W = 0;
+        let H = 0;
+        let poleX = 0;
+        let poleY = 0;
+        let R = 0;
+        let clusters = [];
+        let field = [];
+        let mwCanvas = null;
+        const angle0 = Math.random() * Math.PI * 2;
+
+        function gauss() {
+            return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+        }
+
+        function pickType(key) {
+            let r = Math.random();
+            for (const t of STAR_TYPES) {
+                if ((r -= t[key]) <= 0) return t;
+            }
+            return STAR_TYPES[3];
+        }
+
+        function blobSprite(rgb, size, stops) {
+            const s = document.createElement('canvas');
+            s.width = s.height = size;
+            const g = s.getContext('2d');
+            const h = size / 2;
+            const grad = g.createRadialGradient(h, h, 0, h, h, h);
+            const c = rgb.join(', ');
+            stops.forEach(([o, a]) => grad.addColorStop(o, `rgba(${c}, ${a})`));
+            g.fillStyle = grad;
+            g.fillRect(0, 0, size, size);
+            return s;
+        }
+
+        const SOFT = [[0, 1], [0.2, 0.75], [0.4, 0.4], [0.6, 0.15], [0.8, 0.04], [1, 0]];
+
+        function makeStarSprite(rgb) {
+            const s = document.createElement('canvas');
+            s.width = s.height = 32;
+            const g = s.getContext('2d');
+            const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+            const c = rgb.join(', ');
+            const core = rgb.map(v => Math.round(v + (255 - v) * 0.55)).join(', ');
+            grad.addColorStop(0, `rgba(${core}, 1)`);
+            grad.addColorStop(0.25, `rgba(${c}, 1)`);
+            grad.addColorStop(0.45, `rgba(${c}, 0.35)`);
+            grad.addColorStop(0.7, `rgba(${c}, 0.08)`);
+            grad.addColorStop(1, `rgba(${c}, 0)`);
+            g.fillStyle = grad;
+            g.fillRect(0, 0, 32, 32);
+            return s;
+        }
+
+        function makeSpikeSprite(rgb, star) {
+            const s = document.createElement('canvas');
+            s.width = s.height = 96;
+            const g = s.getContext('2d');
+            const c = rgb.join(', ');
+            for (const [x0, y0, x1, y1] of [[0, 48, 96, 48], [48, 0, 48, 96]]) {
+                const grad = g.createLinearGradient(x0, y0, x1, y1);
+                grad.addColorStop(0, `rgba(${c}, 0)`);
+                grad.addColorStop(0.5, `rgba(${c}, 0.55)`);
+                grad.addColorStop(1, `rgba(${c}, 0)`);
+                g.strokeStyle = grad;
+                g.lineWidth = 1;
+                g.beginPath();
+                g.moveTo(x0, y0);
+                g.lineTo(x1, y1);
+                g.stroke();
+            }
+            g.drawImage(star, 48 - 16.5, 48 - 16.5, 33, 33);
+            return s;
+        }
+
+        for (const t of STAR_TYPES) {
+            t.css = `rgb(${t.rgb.join(', ')})`;
+            t.star = makeStarSprite(t.rgb);
+            t.spike = makeSpikeSprite(t.rgb, t.star);
+            t.glow = blobSprite(t.rgb, 64, SOFT);
+        }
+
+        const HALPHA = blobSprite([205, 85, 110], 64, SOFT);
+        const REFLECT = blobSprite([120, 150, 230], 64, SOFT);
+        const DUST = blobSprite([0, 0, 0], 64, SOFT);
+        const MW_WARM = blobSprite([210, 202, 188], 64, SOFT);
+        const MW_COOL = blobSprite([185, 198, 222], 64, SOFT);
+
+        function makeNebula(radius) {
+            const size = Math.ceil(radius * 2.6 * GLOW_SCALE);
+            const s = document.createElement('canvas');
+            s.width = s.height = size;
+            const g = s.getContext('2d');
+            g.globalCompositeOperation = 'lighter';
+            const n = 8 + Math.floor(Math.random() * 8);
+            for (let i = 0; i < n; i++) {
+                const r = size * (0.12 + Math.random() * 0.23);
+                const x = size / 2 + gauss() * size * 0.16;
+                const y = size / 2 + gauss() * size * 0.16;
+                g.globalAlpha = 0.25 + Math.random() * 0.25;
+                g.drawImage(Math.random() < 0.75 ? HALPHA : REFLECT, x - r, y - r, r * 2, r * 2);
+            }
+            g.globalCompositeOperation = 'destination-out';
+            for (let i = 0; i < 5; i++) {
+                const r = size * (0.06 + Math.random() * 0.1);
+                const x = size / 2 + gauss() * size * 0.18;
+                const y = size / 2 + gauss() * size * 0.18;
+                g.globalAlpha = 0.5;
+                g.drawImage(DUST, x - r, y - r, r * 2, r * 2);
+            }
+            return s;
+        }
+
+        function makeMilkyWay() {
+            const w = Math.ceil(2 * R * MW_SCALE);
+            const h = Math.ceil(MW_WIDTH * MW_SCALE);
+            const s = document.createElement('canvas');
+            s.width = w;
+            s.height = h;
+            const g = s.getContext('2d');
+            g.globalCompositeOperation = 'lighter';
+            const n = Math.round((w * h) / 40);
+            for (let i = 0; i < n; i++) {
+                const r = 6 + Math.random() * 22;
+                const x = Math.random() * w;
+                const y = h / 2 + gauss() * h * 0.17;
+                g.globalAlpha = 0.02 + Math.random() * 0.04;
+                g.drawImage(Math.random() < 0.7 ? MW_WARM : MW_COOL, x - r, y - r, r * 2, r * 2);
+            }
+            for (let i = 0; i < w / 60; i++) {
+                const r = 30 + Math.random() * 30;
+                const x = Math.random() * w;
+                const y = h / 2 + gauss() * h * 0.1;
+                g.globalAlpha = 0.08 + Math.random() * 0.08;
+                g.drawImage(MW_WARM, x - r, y - r, r * 2, r * 2);
+            }
+            g.globalCompositeOperation = 'destination-out';
+            const phase = Math.random() * Math.PI * 2;
+            const freq = (2 * Math.PI) / (w * (0.2 + Math.random() * 0.2));
+            for (let i = 0; i < w * 0.7; i++) {
+                const x = Math.random() * w;
+                const r = 3 + Math.random() * 11;
+                const y = h / 2 + h * 0.04 + Math.sin(x * freq + phase) * h * 0.08 + gauss() * h * 0.035;
+                g.globalAlpha = 0.18 + Math.random() * 0.2;
+                g.drawImage(DUST, x - r, y - r, r * 2, r * 2);
+            }
+            return s;
+        }
+
+        function makeCluster(wx, wy) {
+            const depth = Math.random();
+            const young = Math.random() < 0.45;
+            const radius = 120 + Math.random() * 200;
+            const scale = 0.55 + 0.45 * depth;
+            const cluster = {
+                wx, wy, radius, depth, scale,
+                alpha: 0.4 + 0.7 * depth,
+                lineWidth: 0.5 + 0.5 * depth,
+                nebula: NEBULAE && young && Math.random() < 0.4 ? makeNebula(radius) : null,
+                stars: [],
+                bright: [],
+                sx: 0, sy: 0,
+                visible: false
+            };
+            const count = 8 + Math.floor(Math.random() * 45);
+            for (let i = 0; i < count; i++) {
+                const a = radius * Math.sqrt(Math.random());
+                const tilt = Math.random() * Math.PI * 2;
+                const raw = 0.5 + Math.pow(Math.random(), 3) * 2.8;
+                cluster.stars.push({
+                    a,
+                    b: a * (0.3 + 0.7 * Math.random()),
+                    cosT: Math.cos(tilt),
+                    sinT: Math.sin(tilt),
+                    omega: (2 * Math.PI / (420 + Math.random() * 600)) * ORBIT_SPEED * (Math.random() < 0.5 ? -1 : 1),
+                    phase: Math.random() * Math.PI * 2,
+                    size: raw * scale,
+                    linked: raw > 1.3,
+                    spiked: DIFFRACTION_SPIKES && raw > 2.9,
+                    type: pickType(young ? 'young' : 'old'),
+                    x: 0,
+                    y: 0
+                });
+            }
+            return cluster;
+        }
+
+        function coverRadius(w, h) {
+            const px = POLE_X * w;
+            const py = POLE_Y * h;
+            return Math.max(
+                Math.hypot(px, py),
+                Math.hypot(w - px, py),
+                Math.hypot(px, h - py),
+                Math.hypot(w - px, h - py)
+            ) + 450;
+        }
+
+        function buildWorld() {
+            R = coverRadius(Math.max(screen.width, W), Math.max(screen.height, H));
+            const area = Math.PI * R * R;
+            clusters = [];
+            const nClusters = Math.round(area * CLUSTER_DENSITY);
+            for (let i = 0; i < nClusters; i++) {
+                const r = R * Math.sqrt(Math.random());
+                const th = Math.random() * Math.PI * 2;
+                clusters.push(makeCluster(Math.cos(th) * r, Math.sin(th) * r));
+            }
+            clusters.sort((a, b) => a.depth - b.depth);
+
+            field = [];
+            const nField = Math.round(area * FIELD_DENSITY);
+            const nBand = MILKY_WAY ? Math.round(nField * 0.6) : 0;
+            for (let i = 0; i < nField + nBand; i++) {
+                let wx;
+                let wy;
+                if (i < nField) {
+                    const r = R * Math.sqrt(Math.random());
+                    const th = Math.random() * Math.PI * 2;
+                    wx = Math.cos(th) * r;
+                    wy = Math.sin(th) * r;
+                } else {
+                    wx = (Math.random() * 2 - 1) * R;
+                    wy = gauss() * MW_WIDTH * 0.2;
+                }
+                field.push({
+                    wx, wy,
+                    r: 0.3 + Math.pow(Math.random(), 4) * 1.1,
+                    a: 0.08 + Math.pow(Math.random(), 3) * 0.5,
+                    type: pickType('field')
+                });
+            }
+
+            mwCanvas = MILKY_WAY ? makeMilkyWay() : null;
+        }
+
+        function drawBackground(A) {
+            bctx.setTransform(1, 0, 0, 1, 0, 0);
+            bctx.globalAlpha = 1;
+            bctx.clearRect(0, 0, W, H);
+            if (mwCanvas) {
+                bctx.translate(poleX, poleY);
+                bctx.rotate(A);
+                bctx.globalAlpha = MW_STRENGTH;
+                bctx.drawImage(mwCanvas, -R, -MW_WIDTH / 2, 2 * R, MW_WIDTH);
+                bctx.setTransform(1, 0, 0, 1, 0, 0);
+            }
+            const cos = Math.cos(A);
+            const sin = Math.sin(A);
+            for (const s of field) {
+                const x = poleX + cos * s.wx - sin * s.wy;
+                const y = poleY + sin * s.wx + cos * s.wy;
+                if (x < -2 || y < -2 || x > W + 2 || y > H + 2) continue;
+                bctx.globalAlpha = s.a;
+                bctx.fillStyle = s.type.css;
+                bctx.beginPath();
+                bctx.arc(x, y, s.r, 0, Math.PI * 2);
+                bctx.fill();
+            }
+            bctx.globalAlpha = 1;
+        }
+
+        function resize() {
+            W = window.innerWidth;
+            H = window.innerHeight;
+            canvas.width = bgCanvas.width = W;
+            canvas.height = bgCanvas.height = H;
+            glowCanvas.width = Math.ceil(W * GLOW_SCALE);
+            glowCanvas.height = Math.ceil(H * GLOW_SCALE);
+            poleX = POLE_X * W;
+            poleY = POLE_Y * H;
+            if (coverRadius(W, H) > R) buildWorld();
+            lastBg = -Infinity;
+        }
+
+        function position(t, A) {
+            const cos = Math.cos(A);
+            const sin = Math.sin(A);
+            for (const c of clusters) {
+                c.sx = poleX + cos * c.wx - sin * c.wy;
+                c.sy = poleY + sin * c.wx + cos * c.wy;
+                const m = c.radius + GLOW_RADIUS;
+                c.visible = c.sx > -m && c.sy > -m && c.sx < W + m && c.sy < H + m;
+                if (!c.visible) continue;
+                c.bright.length = 0;
+                for (const s of c.stars) {
+                    const e = s.omega * t + s.phase;
+                    const ox = s.a * Math.cos(e);
+                    const oy = s.b * Math.sin(e);
+                    const dx = ox * s.cosT - oy * s.sinT;
+                    const dy = ox * s.sinT + oy * s.cosT;
+                    s.x = c.sx + cos * dx - sin * dy;
+                    s.y = c.sy + sin * dx + cos * dy;
+                    if (s.linked) c.bright.push(s);
+                }
+            }
+        }
+
+        function drawGlow(A) {
+            gctx.setTransform(1, 0, 0, 1, 0, 0);
+            gctx.globalCompositeOperation = 'source-over';
+            gctx.globalAlpha = 1;
+            gctx.clearRect(0, 0, glowCanvas.width, glowCanvas.height);
+            gctx.globalCompositeOperation = 'lighter';
+            for (const c of clusters) {
+                if (!c.visible) continue;
+                if (c.nebula) {
+                    const half = c.nebula.width / 2;
+                    gctx.setTransform(1, 0, 0, 1, c.sx * GLOW_SCALE, c.sy * GLOW_SCALE);
+                    gctx.rotate(A);
+                    gctx.globalAlpha = Math.min(1, NEBULA_ALPHA * c.alpha);
+                    gctx.drawImage(c.nebula, -half, -half);
+                }
+                gctx.setTransform(GLOW_SCALE, 0, 0, GLOW_SCALE, 0, 0);
+                const r = GLOW_RADIUS * c.scale;
+                for (const s of c.stars) {
+                    gctx.globalAlpha = Math.min(1, GLOW_BLOB_ALPHA * c.alpha * s.type.brightness * (0.5 + s.size / 3));
+                    gctx.drawImage(s.type.glow, s.x - r, s.y - r, r * 2, r * 2);
+                }
+            }
+            gctx.setTransform(1, 0, 0, 1, 0, 0);
+            gctx.globalAlpha = 1;
+            ctx.globalAlpha = GLOW_STRENGTH;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(glowCanvas, 0, 0, W, H);
+            ctx.globalAlpha = 1;
+        }
+
+        function drawCluster(c) {
+            if (CONSTELLATION_LINES) {
+                const m = c.bright;
+                const lineAlpha = LINE_ALPHA * c.alpha;
+                ctx.lineWidth = c.lineWidth;
+                for (let i = 0; i < m.length; i++) {
+                    const p1 = m[i];
+                    for (let j = i + 1; j < m.length; j++) {
+                        const p2 = m[j];
+                        const dx = p1.x - p2.x;
+                        const dy = p1.y - p2.y;
+                        const dSq = dx * dx + dy * dy;
+                        if (dSq < LINK_DIST_SQ) {
+                            const f = 1 - Math.sqrt(dSq) / LINK_DIST;
+                            ctx.strokeStyle = `rgba(${LINE_RGB}, ${f * Math.sqrt(f) * lineAlpha})`;
+                            ctx.beginPath();
+                            ctx.moveTo(p1.x, p1.y);
+                            ctx.lineTo(p2.x, p2.y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            for (const s of c.stars) {
+                ctx.globalAlpha = Math.min(1, STAR_ALPHA * c.alpha * s.type.brightness);
+                if (s.spiked) {
+                    const r = s.size * 7;
+                    ctx.drawImage(s.type.spike, s.x - r, s.y - r, r * 2, r * 2);
+                } else {
+                    const r = s.size * 2.4;
+                    ctx.drawImage(s.type.star, s.x - r, s.y - r, r * 2, r * 2);
+                }
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        let last = -Infinity;
+        let lastBg = -Infinity;
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+            if (now - last < FRAME_MS - 2) return;
+            last = now;
+            const t = now / 1000;
+            const A = SKY_ROTATION ? angle0 + ROTATION_RATE * t : angle0;
+
+            if (now - lastBg >= BG_REDRAW_MS) {
+                drawBackground(A);
+                lastBg = now;
+            }
+
+            position(t, A);
+            ctx.clearRect(0, 0, W, H);
+            if (GLOW) drawGlow(A);
+            for (const c of clusters) {
+                if (c.visible) drawCluster(c);
+            }
+        }
+
+        resize();
+        window.addEventListener('resize', resize);
+        requestAnimationFrame(animate);
+    });
+</script>
+</head>
+<body>
+</body>
+</html>

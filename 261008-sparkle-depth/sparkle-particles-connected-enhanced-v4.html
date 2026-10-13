@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✨</text></svg>">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enhanced Connected Particles</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #001524;
+        overflow: hidden;
+    }
+    body.vignette {
+        background: radial-gradient(ellipse at center, #00223a 0%, #001524 55%, #000a12 100%);
+    }
+    canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const DEPTH = true;
+        const GLOW = true;
+        const VIGNETTE = true;
+
+        const TARGET_FPS = 30;
+        const FRAME_MS = 1000 / TARGET_FPS;
+        const BASE_FRAME_MS = 1000 / 60;
+        const LINK_DIST = 150;
+        const LINK_DIST_SQ = LINK_DIST * LINK_DIST;
+        const FAR_RGB = [135, 160, 225];
+        const NEAR_RGB = [190, 210, 255];
+        const FLAT_RGB = [180, 200, 255];
+
+        if (VIGNETTE) document.body.classList.add('vignette');
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        document.body.appendChild(canvas);
+
+        let particles = [];
+        let clusters = [];
+        let lastW = 0;
+        let lastH = 0;
+
+        function resize() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            if (lastW && lastH && (w !== lastW || h !== lastH)) {
+                const sx = w / lastW;
+                const sy = h / lastH;
+                for (const c of clusters) {
+                    c.x *= sx;
+                    c.y *= sy;
+                }
+                for (const p of particles) {
+                    p.x *= sx; p.y *= sy;
+                    p.startX *= sx; p.startY *= sy;
+                    p.targetX *= sx; p.targetY *= sy;
+                }
+            }
+            canvas.width = w;
+            canvas.height = h;
+            lastW = w;
+            lastH = h;
+        }
+
+        resize();
+        window.addEventListener('resize', resize);
+
+        function makeSprite(rgb) {
+            const s = document.createElement('canvas');
+            s.width = s.height = 64;
+            const g = s.getContext('2d');
+            const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+            const [r, gr, b] = rgb;
+            grad.addColorStop(0, `rgba(${r}, ${gr}, ${b}, 1)`);
+            grad.addColorStop(0.22, `rgba(${r}, ${gr}, ${b}, 1)`);
+            grad.addColorStop(0.28, `rgba(${r}, ${gr}, ${b}, 0.18)`);
+            grad.addColorStop(0.55, `rgba(${r}, ${gr}, ${b}, 0.04)`);
+            grad.addColorStop(1, `rgba(${r}, ${gr}, ${b}, 0)`);
+            g.fillStyle = grad;
+            g.fillRect(0, 0, 64, 64);
+            return s;
+        }
+
+        class Particle {
+            constructor(x, y, cluster) {
+                this.x = x;
+                this.y = y;
+                this.speed = 0.0001 + Math.random() * 0.0001;
+                this.cluster = cluster;
+                this.size = (Math.random() * 2 + 1) * cluster.scale;
+                this.setNewTarget();
+            }
+
+            setNewTarget() {
+                const c = this.cluster;
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.pow(Math.random(), 0.5) * c.radius;
+                this.startX = this.x;
+                this.startY = this.y;
+                this.targetX = c.x + Math.cos(angle) * distance;
+                this.targetY = c.y + Math.sin(angle) * distance;
+                this.progress = 0;
+            }
+
+            update(step) {
+                this.progress += this.speed * step;
+                if (this.progress >= 1) {
+                    this.setNewTarget();
+                }
+                const t = Math.sin(this.progress * Math.PI);
+                this.x = this.startX + (this.targetX - this.startX) * t;
+                this.y = this.startY + (this.targetY - this.startY) * t;
+            }
+        }
+
+        function createCluster(x, y, count, radius) {
+            const depth = DEPTH ? Math.random() : 1;
+            const rgb = DEPTH
+                ? FAR_RGB.map((f, i) => Math.round(f + (NEAR_RGB[i] - f) * depth))
+                : FLAT_RGB;
+            const cluster = {
+                x, y, radius, depth,
+                scale: DEPTH ? 0.55 + 0.45 * depth : 1,
+                alpha: DEPTH ? 0.45 + 0.65 * depth : 1,
+                lineWidth: DEPTH ? 0.6 + 0.6 * depth : 1,
+                rgb: rgb.join(', '),
+                sprite: GLOW ? makeSprite(rgb) : null,
+                members: []
+            };
+            clusters.push(cluster);
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.pow(Math.random(), 0.5) * radius;
+                const p = new Particle(x + Math.cos(angle) * distance, y + Math.sin(angle) * distance, cluster);
+                cluster.members.push(p);
+                particles.push(p);
+            }
+        }
+
+        function init() {
+            particles = [];
+            clusters = [];
+            const numClusters = Math.floor(Math.random() * 8) + 8;
+            for (let i = 0; i < numClusters; i++) {
+                const radius = Math.random() * 200 + 150;
+                const count = Math.floor(Math.random() * 49) + 7;
+                createCluster(Math.random() * canvas.width, Math.random() * canvas.height, count, radius);
+            }
+            clusters.sort((a, b) => a.depth - b.depth);
+        }
+
+        function drawCluster(c) {
+            const m = c.members;
+            const lineAlpha = 0.15 * c.alpha;
+            ctx.lineWidth = c.lineWidth;
+            for (let i = 0; i < m.length; i++) {
+                const p1 = m[i];
+                for (let j = i + 1; j < m.length; j++) {
+                    const p2 = m[j];
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    const dSq = dx * dx + dy * dy;
+                    if (dSq < LINK_DIST_SQ) {
+                        const alpha = (1 - Math.sqrt(dSq) / LINK_DIST) * lineAlpha;
+                        ctx.strokeStyle = `rgba(${c.rgb}, ${alpha})`;
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            if (GLOW) {
+                ctx.globalAlpha = Math.min(1, 0.4 * c.alpha);
+                for (const p of m) {
+                    const r = p.size * 4;
+                    ctx.drawImage(c.sprite, p.x - r, p.y - r, r * 2, r * 2);
+                }
+                ctx.globalAlpha = 1;
+            } else {
+                ctx.fillStyle = `rgba(${c.rgb}, ${Math.min(1, 0.4 * c.alpha)})`;
+                for (const p of m) {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        let last = performance.now();
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+            const elapsed = now - last;
+            if (elapsed < FRAME_MS - 2) return;
+            last = now;
+            const step = Math.min(elapsed, 250) / BASE_FRAME_MS;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (const p of particles) p.update(step);
+            for (const c of clusters) drawCluster(c);
+        }
+
+        init();
+        requestAnimationFrame(animate);
+    });
+</script>
+</head>
+<body>
+</body>
+</html>
